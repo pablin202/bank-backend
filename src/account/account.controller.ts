@@ -3,7 +3,9 @@ import { AccountService } from './account.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GetUser } from '../auth/get-user.decorator';
 import { TransferDto } from './dto/transfer.dto';
-
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+@ApiTags('account')
+@ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('account')
 export class AccountController {

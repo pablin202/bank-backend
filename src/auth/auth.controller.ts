@@ -4,17 +4,21 @@ import { MfaService } from './mfa/mfa.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { GetUser } from './get-user.decorator';
 import { UserService } from 'src/user/user.service';
+import { CreateUserDto } from 'src/account/dto/create-user.dto';
+import { ApiBody, ApiTags } from '@nestjs/swagger';
+import { LoginDto } from './dto/login.dto';
 
-
+@ApiTags('auth')
 @Controller('auth')
 export class AuthController {
 
-  constructor(private readonly authService: AuthService, 
+  constructor(private readonly authService: AuthService,
     private readonly mfaService: MfaService,
     private readonly userService: UserService) { }
 
   @Post('login')
-  async login(@Body() body) {
+  @ApiBody({ type: LoginDto })
+  async login(@Body() body: LoginDto) {
     const user = await this.authService.validateUser(body.email, body.password);
     if (!user) {
       throw new UnauthorizedException();
@@ -44,5 +48,12 @@ export class AuthController {
     // Aquí generas el JWT
     const token = await this.authService.login(user);
     return token;
+  }
+
+  @Post('signup')
+  @ApiBody({ type: CreateUserDto })
+  async signup(@Body() createUserDto: CreateUserDto) {
+    const user = await this.authService.register(createUserDto.email, createUserDto.password);
+    return { message: 'User created successfully', userId: user.id };
   }
 }

@@ -3,26 +3,52 @@ import { Injectable } from '@nestjs/common';
 @Injectable()
 export class AccountService {
   async getBalance(userId: number) {
-    // 🔷 Aquí podrías consultar DB, de momento mock
-    return { balance: 1234.56, currency: 'USD', userId };
+    // TODO: Query the DB for the actual balance of this user.
+    return {
+      userId,
+      balance: 1234.56,
+      currency: 'USD',
+      updatedAt: new Date().toISOString(),
+    };
   }
 
   async getTransactions(userId: number) {
-    // 🔷 Mock data
+    // TODO: Fetch from DB. Mock data below.
     return [
-      { id: 1, date: '2025-07-08', type: 'credit', amount: 500, description: 'Salary' },
-      { id: 2, date: '2025-07-07', type: 'debit', amount: 100, description: 'Grocery' },
+      {
+        id: 1,
+        date: '2025-07-08T10:30:00.000Z',
+        type: 'credit',
+        amount: 1500,
+        description: 'Salary deposit',
+      },
+      {
+        id: 2,
+        date: '2025-07-07T14:45:00.000Z',
+        type: 'debit',
+        amount: 120,
+        description: 'Grocery store',
+      },
+      {
+        id: 3,
+        date: '2025-07-06T09:15:00.000Z',
+        type: 'debit',
+        amount: 60,
+        description: 'Coffee shop',
+      },
     ];
   }
 
   async transfer(userId: number, toAccount: string, amount: number) {
-    // 🔷 Aquí validas saldo suficiente, etc. (mock)
+    // TODO: Validate balance >= amount, deduct from user, add to recipient, save in DB.
     return {
       status: 'success',
       fromUser: userId,
       toAccount,
       amount,
-      timestamp: new Date(),
+      currency: 'USD',
+      timestamp: new Date().toISOString(),
+      message: `Transferred ${amount} USD to account ${toAccount}`,
     };
   }
 }

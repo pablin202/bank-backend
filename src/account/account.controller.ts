@@ -1,17 +1,26 @@
-import { Controller, Get, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
+import { AccountService } from './account.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { GetUser } from 'src/auth/get-user.decorator';
+import { GetUser } from '../auth/get-user.decorator';
+import { TransferDto } from './dto/transfer.dto';
 
+@UseGuards(JwtAuthGuard)
 @Controller('account')
 export class AccountController {
-  @UseGuards(JwtAuthGuard)
+  constructor(private readonly accountService: AccountService) {}
+
   @Get('balance')
   getBalance(@GetUser() user) {
-    console.log(user); // payload de validate() en JwtStrategy
-    return {
-      balance: 1234.56, // Mock data
-      userId: user.userId,
-      email: user.email,
-    };
+    return this.accountService.getBalance(user.userId);
+  }
+
+  @Get('transactions')
+  getTransactions(@GetUser() user) {
+    return this.accountService.getTransactions(user.userId);
+  }
+
+  @Post('transfer')
+  transfer(@GetUser() user, @Body() dto: TransferDto) {
+    return this.accountService.transfer(user.userId, dto.toAccount, dto.amount);
   }
 }

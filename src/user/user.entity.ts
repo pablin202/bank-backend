@@ -10,4 +10,10 @@ export class User {
 
   @Column()
   password: string;
+
+  @Column({ nullable: true })
+  mfaSecret?: string;
+
+  @Column({ default: false })
+  isMfaEnabled: boolean;
 }

@@ -331,7 +331,7 @@ export class DeviceController {
   }
 
   private analyzeDeviceSecurityStatus(device: any): any {
-    const alerts = [];
+    const alerts: any[] = [];
     let severity = 'LOW';
 
     if (device.securityInfo?.isRooted || device.securityInfo?.isJailbroken) {
@@ -380,7 +380,7 @@ export class DeviceController {
   }
 
   private getRecommendedActions(alerts: any[]): string[] {
-    const actions = [];
+    const actions: string[] = [];
 
     if (alerts.some(a => a.type === 'ROOTED_DEVICE')) {
       actions.push('Consider removing root access or using a different device');

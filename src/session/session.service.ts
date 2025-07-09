@@ -1,6 +1,6 @@
 import { Injectable, UnauthorizedException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan, MoreThan } from 'typeorm';
+import { Repository, LessThan, MoreThan, Not } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { UserSession } from './entities/user-session.entity';
 import { Device } from '../device/entities/device.entity';
@@ -179,7 +179,11 @@ export class SessionService {
       }
 
       // Verificar estado del dispositivo
-      if (session.device.status !== 'APPROVED') {
+      const device = await this.deviceRepository.findOne({
+        where: { id: session.deviceId }
+      });
+      
+      if (!device || device.status !== 'APPROVED') {
         await this.terminateSession(sessionId, 'DEVICE_NOT_APPROVED');
         return { isValid: false, warningMessage: 'Device no longer approved' };
       }
@@ -222,7 +226,6 @@ export class SessionService {
 
       const session = await this.sessionRepository.findOne({
         where: { refreshToken, isActive: true },
-        relations: ['device'],
       });
 
       if (!session || session.expiresAt < new Date()) {
@@ -247,6 +250,11 @@ export class SessionService {
         { expiresIn: `${SESSION_CONFIG.ACCESS_TOKEN_EXPIRY}ms` }
       );
 
+      // Obtener información del dispositivo
+      const device = await this.deviceRepository.findOne({
+        where: { id: session.deviceId }
+      });
+
       // Actualizar última actividad
       await this.updateLastActivity(session.id);
 
@@ -264,10 +272,10 @@ export class SessionService {
         sessionExpiresAt: session.expiresAt,
         securityLevel: session.securityLevel,
         deviceInfo: {
-          deviceName: session.device.deviceName,
-          deviceType: session.device.deviceType,
-          isApproved: session.device.status === 'APPROVED',
-          isTrusted: session.device.isTrusted,
+          deviceName: device?.deviceName || 'Unknown Device',
+          deviceType: device?.deviceType || 'UNKNOWN',
+          isApproved: device?.status === 'APPROVED',
+          isTrusted: device?.isTrusted || false,
         },
       };
 
@@ -309,9 +317,11 @@ export class SessionService {
 
   async terminateAllUserSessions(userId: string, excludeSessionId?: string): Promise<void> {
     try {
-      const whereClause: any = { userId, isActive: true };
+      let whereClause: any = { userId, isActive: true };
       if (excludeSessionId) {
-        whereClause.id = { $ne: excludeSessionId };
+        whereClause = [
+          { userId, isActive: true, id: Not(excludeSessionId) }
+        ];
       }
 
       const sessions = await this.sessionRepository.find({
@@ -342,22 +352,31 @@ export class SessionService {
     try {
       const sessions = await this.sessionRepository.find({
         where: { userId, isActive: true },
-        relations: ['device'],
         order: { lastActivityAt: 'DESC' },
       });
 
-      return sessions.map(session => ({
-        id: session.id,
-        deviceName: session.device.deviceName,
-        deviceType: session.device.deviceType,
-        operatingSystem: session.device.operatingSystem,
-        ipAddress: session.ipAddress,
-        locationInfo: session.locationInfo,
-        lastActivityAt: session.lastActivityAt,
-        createdAt: session.createdAt,
-        isCurrent: false, // This will be set by the controller
-        securityLevel: session.securityLevel,
-      }));
+      const sessionsWithDevices = await Promise.all(
+        sessions.map(async (session) => {
+          const device = await this.deviceRepository.findOne({
+            where: { id: session.deviceId }
+          });
+          
+          return {
+            id: session.id,
+            deviceName: device?.deviceName || 'Unknown Device',
+            deviceType: device?.deviceType || 'UNKNOWN',
+            operatingSystem: device?.operatingSystem || 'Unknown',
+            ipAddress: session.ipAddress,
+            locationInfo: session.locationInfo,
+            lastActivityAt: session.lastActivityAt,
+            createdAt: session.createdAt,
+            isCurrent: false, // This will be set by the controller
+            securityLevel: session.securityLevel,
+          };
+        })
+      );
+
+      return sessionsWithDevices;
 
     } catch (error) {
       this.logger.error(`Failed to get active sessions for user ${userId}:`, error);

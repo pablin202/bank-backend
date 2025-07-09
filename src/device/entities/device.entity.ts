@@ -8,8 +8,9 @@ import {
   UpdateDateColumn,
   Index,
 } from 'typeorm';
-import { User } from '../../user/user.entity';
-import { UserSession } from '../../session/entities/user-session.entity';
+// Import types to avoid circular dependencies
+type User = import('../../user/user.entity').User;
+type UserSession = import('../../session/entities/user-session.entity').UserSession;
 
 export enum DeviceType {
   MOBILE = 'MOBILE',
@@ -134,10 +135,4 @@ export class Device {
 
   @UpdateDateColumn()
   updatedAt: Date;
-
-  @ManyToOne(() => User, user => user.devices)
-  user: User;
-
-  @OneToMany(() => UserSession, session => session.device)
-  sessions: UserSession[];
 }

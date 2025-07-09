@@ -1,6 +1,6 @@
 import { Injectable, UnauthorizedException, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Not } from 'typeorm';
 import { Device, DeviceStatus, DeviceType } from './entities/device.entity';
 import { User } from '../user/user.entity';
 import { NotificationService } from '../notification/notification.service';
@@ -65,28 +65,29 @@ export class DeviceService {
       const approvalMethod = this.determineApprovalMethod(securityAnalysis, userDeviceCount === 0);
 
       // 7. Crear dispositivo
-      const device = this.deviceRepository.create({
-        userId,
-        deviceId,
-        deviceFingerprint,
-        deviceName,
-        deviceType,
-        operatingSystem,
-        browserInfo,
-        status: approvalMethod.autoApprove ? DeviceStatus.APPROVED : DeviceStatus.PENDING,
-        isPrimary: userDeviceCount === 0, // Primer dispositivo es primario
-        isTrusted: approvalMethod.autoApprove && userDeviceCount === 0,
-        deviceCapabilities,
-        securityInfo,
-        locationInfo: locationInfo || geoLocation,
-        loginAttempts: 0,
-        approvedAt: approvalMethod.autoApprove ? new Date() : null,
-        approvalMethod: approvalMethod.autoApprove ? {
-          type: 'AUTO',
+      const device = new Device();
+      device.userId = userId;
+      device.deviceId = deviceId;
+      device.deviceFingerprint = deviceFingerprint;
+      device.deviceName = deviceName;
+      device.deviceType = deviceType;
+      device.operatingSystem = operatingSystem;
+      device.browserInfo = browserInfo;
+      device.status = approvalMethod.autoApprove ? DeviceStatus.APPROVED : DeviceStatus.PENDING;
+      device.isPrimary = userDeviceCount === 0;
+      device.isTrusted = approvalMethod.autoApprove && userDeviceCount === 0;
+      device.deviceCapabilities = deviceCapabilities;
+      device.securityInfo = securityInfo;
+      device.locationInfo = locationInfo || geoLocation;
+      device.loginAttempts = 0;
+      if (approvalMethod.autoApprove) {
+        device.approvedAt = new Date();
+        device.approvalMethod = {
+          type: 'AUTO' as const,
           timestamp: new Date(),
           ipAddress,
-        } : null,
-      });
+        };
+      }
 
       const savedDevice = await this.deviceRepository.save(device);
 
@@ -165,6 +166,10 @@ export class DeviceService {
         where: { id: deviceId },
       });
 
+      if (!updatedDevice) {
+        throw new NotFoundException('Device not found after approval');
+      }
+
       // Auditar aprobación
       await this.auditService.logDeviceEvent(userId, 'DEVICE_APPROVED', {
         deviceId,
@@ -241,6 +246,10 @@ export class DeviceService {
       const updatedDevice = await this.deviceRepository.findOne({
         where: { id: deviceId },
       });
+
+      if (!updatedDevice) {
+        throw new NotFoundException('Device not found after update');
+      }
 
       // Auditar actualización
       await this.auditService.logDeviceEvent(userId, 'DEVICE_UPDATED', {
@@ -409,7 +418,7 @@ export class DeviceService {
     try {
       await this.deviceRepository.update(deviceId, {
         loginAttempts: 0,
-        lockedUntil: null,
+        lockedUntil: undefined,
         updatedAt: new Date(),
       });
     } catch (error) {
@@ -458,7 +467,7 @@ export class DeviceService {
   }
 
   private analyzeDeviceSecurity(securityInfo: any): any {
-    const risks = [];
+    const risks: string[] = [];
     let riskLevel = 'LOW';
 
     if (securityInfo.isRooted || securityInfo.isJailbroken) {

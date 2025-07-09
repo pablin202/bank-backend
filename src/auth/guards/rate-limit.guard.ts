@@ -1,6 +1,6 @@
 import { Injectable, CanActivate, ExecutionContext, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, LessThan, MoreThan, MoreThanOrEqual } from 'typeorm';
 import { RateLimitAttempt } from '../entities/rate-limit-attempt.entity';
 
 interface RateLimitConfig {
@@ -45,7 +45,7 @@ export class RateLimitGuard implements CanActivate {
       
       // Limpiar intentos antiguos
       await this.rateLimitRepository.delete({
-        createdAt: { $lt: windowStart },
+        createdAt: LessThan(windowStart),
       });
       
       // Verificar si está bloqueado
@@ -54,7 +54,7 @@ export class RateLimitGuard implements CanActivate {
           identifier,
           key,
           isBlocked: true,
-          blockedUntil: { $gt: now },
+          blockedUntil: MoreThan(now),
         },
         order: { createdAt: 'DESC' },
       });
@@ -80,7 +80,7 @@ export class RateLimitGuard implements CanActivate {
         where: {
           identifier,
           key,
-          createdAt: { $gte: windowStart },
+          createdAt: MoreThanOrEqual(windowStart),
         },
       });
       

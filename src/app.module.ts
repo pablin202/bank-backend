@@ -7,6 +7,10 @@ import { UserModule } from './user/user.module';
 import { AuthModule } from './auth/auth.module';
 import { AccountModule } from './account/account.module';
 import { EmailModule } from './email/email.module';
+import { SessionModule } from './session/session.module';
+import { DeviceModule } from './device/device.module';
+import { NotificationModule } from './notification/notification.module';
+import { AuditModule } from './audit/audit.module';
 
 @Module({
   imports: [
@@ -19,13 +23,17 @@ import { EmailModule } from './email/email.module';
       password: process.env.DB_PASS,
       database: process.env.DB_NAME,
       ssl: { rejectUnauthorized: false }, // needed for Railway
-      autoLoadEntities: true,
+      entities: [__dirname + '/**/*.entity{.ts,.js}'],
       synchronize: true, // ONLY in development
     }),
     UserModule,
     AuthModule,
     AccountModule,
-    EmailModule
+    EmailModule,
+    SessionModule,
+    DeviceModule,
+    NotificationModule,
+    AuditModule
   ],
   controllers: [AppController],
   providers: [AppService],

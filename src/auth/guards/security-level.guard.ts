@@ -59,7 +59,7 @@ export class SecurityLevelGuard implements CanActivate {
     
     if (!this.hasRequiredSecurityLevel(currentLevel, finalRequiredLevel)) {
       // Intentar elevar el nivel de seguridad automáticamente
-      await this.sessionService.updateSecurityLevel(user.sessionId, finalRequiredLevel);
+      await this.sessionService.updateSecurityLevel(user.sessionId, finalRequiredLevel as 'NORMAL' | 'HIGH' | 'CRITICAL');
       
       // Si requiere re-autenticación, rechazar
       if (finalRequiredLevel === 'CRITICAL' || finalRequiredLevel === 'HIGH') {

@@ -7,8 +7,9 @@ import {
   UpdateDateColumn,
   Index,
 } from 'typeorm';
-import { User } from '../../user/user.entity';
-import { Device } from '../../device/entities/device.entity';
+// Import types to avoid circular dependencies
+type User = import('../../user/user.entity').User;
+type Device = import('../../device/entities/device.entity').Device;
 
 export interface LocationInfo {
   country?: string;
@@ -87,10 +88,4 @@ export class UserSession {
 
   @UpdateDateColumn()
   updatedAt: Date;
-
-  @ManyToOne(() => User, user => user.sessions)
-  user: User;
-
-  @ManyToOne(() => Device, device => device.sessions)
-  device: Device;
 }

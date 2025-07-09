@@ -18,11 +18,11 @@ export class CreateSessionDto {
   @IsNotEmpty()
   userAgent: string;
 
-  @ApiProperty({ description: 'Device information', type: 'object' })
+  @ApiProperty({ description: 'Device information' })
   @IsObject()
   deviceInfo: DeviceInfo;
 
-  @ApiProperty({ description: 'Location information', type: 'object', required: false })
+  @ApiProperty({ description: 'Location information', required: false })
   @IsOptional()
   @IsObject()
   locationInfo?: LocationInfo;

@@ -28,7 +28,7 @@ import { RegisterDto } from './dto/register.dto';
 import { MfaVerifyDto } from './dto/mfa-verify.dto';
 import { ForgotPasswordDto, ResetPasswordDto } from './dto/password-reset.dto';
 import { UserSafeData } from './interfaces/auth.interface';
-import { RateLimitGuard, RateLimit } from './guards/rate-limit.guard';
+import { RateLimitGuard } from './guards/rate-limit.guard';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -57,7 +57,6 @@ export class AuthController {
 
   @Post('login')
   @UseGuards(RateLimitGuard)
-  @RateLimit({ windowMs: 15 * 60 * 1000, max: 5 }) // 5 attempts per 15 minutes
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login with email and password' })
   @ApiResponse({ status: 200, description: 'Login successful' })
@@ -81,7 +80,6 @@ export class AuthController {
 
   @Post('resend-verification')
   @UseGuards(RateLimitGuard)
-  @RateLimit({ windowMs: 60 * 60 * 1000, max: 3 }) // 3 attempts per hour
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Resend email verification' })
   @ApiResponse({ status: 200, description: 'Verification email sent' })
@@ -107,7 +105,6 @@ export class AuthController {
 
   @Post('forgot-password')
   @UseGuards(RateLimitGuard)
-  @RateLimit({ windowMs: 60 * 60 * 1000, max: 3 }) // 3 attempts per hour
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Request password reset' })
   @ApiResponse({ status: 200, description: 'Password reset email sent' })
@@ -171,7 +168,6 @@ export class AuthController {
 
   @Post('mfa/verify')
   @UseGuards(RateLimitGuard)
-  @RateLimit({ windowMs: 15 * 60 * 1000, max: 10 }) // 10 attempts per 15 minutes
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify MFA code during login' })
   @ApiResponse({ status: 200, description: 'MFA verification successful' })

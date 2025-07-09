@@ -27,15 +27,15 @@ export class RegisterDeviceDto {
   @IsNotEmpty()
   browserInfo: string;
 
-  @ApiProperty({ description: 'Device capabilities', type: 'object' })
+  @ApiProperty({ description: 'Device capabilities' })
   @IsObject()
   deviceCapabilities: DeviceCapabilities;
 
-  @ApiProperty({ description: 'Security information', type: 'object' })
+  @ApiProperty({ description: 'Security information' })
   @IsObject()
   securityInfo: DeviceSecurityInfo;
 
-  @ApiProperty({ description: 'Location information', type: 'object', required: false })
+  @ApiProperty({ description: 'Location information', required: false })
   @IsOptional()
   @IsObject()
   locationInfo?: any;
@@ -104,7 +104,7 @@ export class DeviceRegistrationResponseDto {
   status: 'APPROVED' | 'PENDING_APPROVAL' | 'REJECTED';
 
   @ApiProperty({ description: 'Device information' })
-  device: DeviceResponseDto;
+  device: any;
 
   @ApiProperty({ description: 'Message' })
   message: string;

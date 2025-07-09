@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
 import { UserSession } from './entities/user-session.entity';
@@ -17,7 +17,7 @@ import { AuditModule } from '../audit/audit.module';
       secret: process.env.JWT_SECRET || 'your-secret-key',
       signOptions: { expiresIn: '15m' },
     }),
-    DeviceModule,
+    forwardRef(() => DeviceModule),
     NotificationModule,
     AuditModule,
   ],

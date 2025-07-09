@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
 import { Device } from './entities/device.entity';
@@ -8,16 +8,15 @@ import { DeviceService } from './device.service';
 import { DeviceController } from './device.controller';
 import { NotificationModule } from '../notification/notification.module';
 import { AuditModule } from '../audit/audit.module';
-import { SessionModule } from 'src/session/session.module';
+import { SessionModule } from '../session/session.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Device, User, RateLimitAttempt]),
     NotificationModule,
     AuditModule,
-    SessionModule,
+    forwardRef(() => SessionModule),
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'your-secret-key',
       signOptions: { expiresIn: '15m' },
     }),
   ],

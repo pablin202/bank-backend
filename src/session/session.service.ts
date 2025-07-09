@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, Logger, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan, MoreThan, Not } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
@@ -21,6 +21,7 @@ export class SessionService {
     private sessionRepository: Repository<UserSession>,
     @InjectRepository(Device)
     private deviceRepository: Repository<Device>,
+    @Inject(forwardRef(() => DeviceService))
     private deviceService: DeviceService,
     private jwtService: JwtService,
     private notificationService: NotificationService,

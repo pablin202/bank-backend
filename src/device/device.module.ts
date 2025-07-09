@@ -8,12 +8,14 @@ import { DeviceService } from './device.service';
 import { DeviceController } from './device.controller';
 import { NotificationModule } from '../notification/notification.module';
 import { AuditModule } from '../audit/audit.module';
+import { SessionModule } from 'src/session/session.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Device, User, RateLimitAttempt]),
     NotificationModule,
     AuditModule,
+    SessionModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'your-secret-key',
       signOptions: { expiresIn: '15m' },

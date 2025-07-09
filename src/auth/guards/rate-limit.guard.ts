@@ -1,67 +1,186 @@
-import { Injectable, CanActivate, ExecutionContext, HttpException, HttpStatus } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
+import { Injectable, CanActivate, ExecutionContext, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { RateLimitAttempt } from '../entities/rate-limit-attempt.entity';
 
-interface RateLimitOptions {
-  windowMs: number; // Time window in milliseconds
-  max: number; // Maximum number of requests per window
+interface RateLimitConfig {
+  windowMs: number;
+  maxAttempts: number;
+  blockDurationMs: number;
 }
-
-const RATE_LIMIT_KEY = 'rateLimit';
-export const RateLimit = (options: RateLimitOptions) => {
-  const { SetMetadata } = require('@nestjs/common');
-  return SetMetadata(RATE_LIMIT_KEY, options);
-};
 
 @Injectable()
 export class RateLimitGuard implements CanActivate {
-  private requests = new Map<string, { count: number; resetTime: number }>();
+  private readonly logger = new Logger(RateLimitGuard.name);
+  
+  private readonly configs: { [key: string]: RateLimitConfig } = {
+    'POST /auth/login': { windowMs: 15 * 60 * 1000, maxAttempts: 5, blockDurationMs: 30 * 60 * 1000 },
+    'POST /auth/register': { windowMs: 60 * 60 * 1000, maxAttempts: 3, blockDurationMs: 60 * 60 * 1000 },
+    'POST /auth/forgot-password': { windowMs: 60 * 60 * 1000, maxAttempts: 3, blockDurationMs: 60 * 60 * 1000 },
+    'POST /auth/mfa/verify': { windowMs: 15 * 60 * 1000, maxAttempts: 10, blockDurationMs: 30 * 60 * 1000 },
+    'POST /session': { windowMs: 15 * 60 * 1000, maxAttempts: 5, blockDurationMs: 30 * 60 * 1000 },
+    'POST /session/validate': { windowMs: 60 * 1000, maxAttempts: 30, blockDurationMs: 5 * 60 * 1000 },
+    'POST /session/refresh': { windowMs: 60 * 1000, maxAttempts: 10, blockDurationMs: 5 * 60 * 1000 },
+    'POST /device/register': { windowMs: 60 * 60 * 1000, maxAttempts: 5, blockDurationMs: 60 * 60 * 1000 },
+    'POST /device/*/approve': { windowMs: 60 * 60 * 1000, maxAttempts: 10, blockDurationMs: 60 * 60 * 1000 },
+    'default': { windowMs: 60 * 1000, maxAttempts: 60, blockDurationMs: 60 * 1000 },
+  };
 
-  constructor(private reflector: Reflector) {}
+  constructor(
+    @InjectRepository(RateLimitAttempt)
+    private rateLimitRepository: Repository<RateLimitAttempt>,
+  ) {}
 
-  canActivate(context: ExecutionContext): boolean {
-    const rateLimitOptions = this.reflector.getAllAndOverride<RateLimitOptions>(RATE_LIMIT_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
-
-    if (!rateLimitOptions) {
-      return true;
-    }
-
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
+    const response = context.switchToHttp().getResponse();
+    
     const key = this.getKey(request);
-    const now = Date.now();
-
-    const requestData = this.requests.get(key);
-
-    if (!requestData || now > requestData.resetTime) {
-      // First request or window has expired
-      this.requests.set(key, {
-        count: 1,
-        resetTime: now + rateLimitOptions.windowMs,
+    const identifier = this.getIdentifier(request);
+    const config = this.getConfig(key);
+    
+    try {
+      const now = new Date();
+      const windowStart = new Date(now.getTime() - config.windowMs);
+      
+      // Limpiar intentos antiguos
+      await this.rateLimitRepository.delete({
+        createdAt: { $lt: windowStart },
       });
+      
+      // Verificar si está bloqueado
+      const blockCheck = await this.rateLimitRepository.findOne({
+        where: {
+          identifier,
+          key,
+          isBlocked: true,
+          blockedUntil: { $gt: now },
+        },
+        order: { createdAt: 'DESC' },
+      });
+      
+      if (blockCheck) {
+        const resetTime = blockCheck.blockedUntil;
+        const remainingTime = Math.ceil((resetTime.getTime() - now.getTime()) / 1000);
+        
+        response.setHeader('X-RateLimit-Blocked', 'true');
+        response.setHeader('X-RateLimit-Reset', resetTime.toISOString());
+        response.setHeader('X-RateLimit-Remaining-Time', remainingTime.toString());
+        
+        throw new HttpException({
+          message: 'Rate limit exceeded. Please try again later.',
+          statusCode: HttpStatus.TOO_MANY_REQUESTS,
+          error: 'Too Many Requests',
+          retryAfter: remainingTime,
+        }, HttpStatus.TOO_MANY_REQUESTS);
+      }
+      
+      // Contar intentos en la ventana actual
+      const attempts = await this.rateLimitRepository.count({
+        where: {
+          identifier,
+          key,
+          createdAt: { $gte: windowStart },
+        },
+      });
+      
+      const remaining = Math.max(0, config.maxAttempts - attempts);
+      const resetTime = new Date(now.getTime() + config.windowMs);
+      
+      // Agregar headers de rate limit
+      response.setHeader('X-RateLimit-Limit', config.maxAttempts.toString());
+      response.setHeader('X-RateLimit-Remaining', remaining.toString());
+      response.setHeader('X-RateLimit-Reset', resetTime.toISOString());
+      response.setHeader('X-RateLimit-Window', config.windowMs.toString());
+      
+      // Verificar si excede el límite
+      if (attempts >= config.maxAttempts) {
+        // Crear bloqueo
+        const blockedUntil = new Date(now.getTime() + config.blockDurationMs);
+        
+        await this.rateLimitRepository.save({
+          identifier,
+          key,
+          attempts: attempts + 1,
+          isBlocked: true,
+          blockedUntil,
+          userAgent: request.headers['user-agent'],
+          ipAddress: request.ip || request.connection.remoteAddress,
+          createdAt: now,
+        });
+        
+        this.logger.warn(`Rate limit exceeded for ${identifier} on ${key}. Blocked until ${blockedUntil}`);
+        
+        const blockDurationSeconds = Math.ceil(config.blockDurationMs / 1000);
+        
+        response.setHeader('X-RateLimit-Blocked', 'true');
+        response.setHeader('X-RateLimit-Reset', blockedUntil.toISOString());
+        response.setHeader('X-RateLimit-Remaining-Time', blockDurationSeconds.toString());
+        
+        throw new HttpException({
+          message: 'Rate limit exceeded. Please try again later.',
+          statusCode: HttpStatus.TOO_MANY_REQUESTS,
+          error: 'Too Many Requests',
+          retryAfter: blockDurationSeconds,
+        }, HttpStatus.TOO_MANY_REQUESTS);
+      }
+      
+      // Registrar intento
+      await this.rateLimitRepository.save({
+        identifier,
+        key,
+        attempts: 1,
+        isBlocked: false,
+        userAgent: request.headers['user-agent'],
+        ipAddress: request.ip || request.connection.remoteAddress,
+        createdAt: now,
+      });
+      
+      return true;
+      
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      
+      this.logger.error('Rate limit check failed:', error);
+      // En caso de error, permitir la request pero loggear
       return true;
     }
-
-    if (requestData.count >= rateLimitOptions.max) {
-      throw new HttpException(
-        {
-          statusCode: HttpStatus.TOO_MANY_REQUESTS,
-          message: 'Too many requests',
-          retryAfter: Math.ceil((requestData.resetTime - now) / 1000),
-        },
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
-
-    requestData.count++;
-    return true;
   }
-
+  
   private getKey(request: any): string {
-    // Use IP address and user ID (if authenticated) as key
+    const method = request.method;
+    const path = request.route?.path || request.url;
+    const key = `${method} ${path}`;
+    
+    // Normalizar paths con parámetros
+    const normalizedKey = key.replace(/\/:[^\/]+/g, '/*');
+    
+    return normalizedKey;
+  }
+  
+  private getIdentifier(request: any): string {
+    // Usar IP + User Agent como identificador único
     const ip = request.ip || request.connection.remoteAddress;
-    const userId = request.user?.id || 'anonymous';
-    return `${ip}:${userId}`;
+    const userAgent = request.headers['user-agent'] || '';
+    const deviceFingerprint = request.headers['x-device-fingerprint'] || '';
+    
+    // Si hay usuario autenticado, usar su ID
+    if (request.user?.id) {
+      return `user:${request.user.id}`;
+    }
+    
+    // Si hay device fingerprint, usarlo
+    if (deviceFingerprint) {
+      return `device:${deviceFingerprint}`;
+    }
+    
+    // Fallback a IP + User Agent
+    return `ip:${ip}:ua:${userAgent.substring(0, 50)}`;
+  }
+  
+  private getConfig(key: string): RateLimitConfig {
+    return this.configs[key] || this.configs['default'];
   }
 }

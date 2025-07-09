@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { JwtModule } from '@nestjs/jwt';
 import { Device } from './entities/device.entity';
 import { User } from '../user/user.entity';
 import { RateLimitAttempt } from '../auth/entities/rate-limit-attempt.entity';
@@ -13,9 +14,13 @@ import { AuditModule } from '../audit/audit.module';
     TypeOrmModule.forFeature([Device, User, RateLimitAttempt]),
     NotificationModule,
     AuditModule,
+    JwtModule.register({
+      secret: process.env.JWT_SECRET || 'your-secret-key',
+      signOptions: { expiresIn: '15m' },
+    }),
   ],
   controllers: [DeviceController],
   providers: [DeviceService],
   exports: [DeviceService],
 })
-export class DeviceModule {}
+export class DeviceModule { }

@@ -88,7 +88,7 @@ export class UserService {
     });
   }
 
-  async verifyEmail(token: string): Promise<void> {
+  async verifyEmail(token: string): Promise<User> {
     const user = await this.findByEmailVerificationToken(token);
     if (!user) {
       throw new BadRequestException('Invalid or expired verification token');
@@ -98,6 +98,10 @@ export class UserService {
       isEmailVerified: true,
       emailVerificationToken: undefined,
     });
+
+    // Return the updated user from database
+    const updatedUser = await this.findById(user.id);
+    return updatedUser!;
   }
 
   async generatePasswordResetToken(email: string): Promise<string> {
@@ -175,5 +179,13 @@ export class UserService {
       lastLoginAt: user.lastLoginAt,
       createdAt: user.createdAt,
     };
+  }
+
+  async generateEmailVerificationToken(userId: number): Promise<string> {
+    const token = this.generateToken();
+    await this.userRepo.update(userId, {
+      emailVerificationToken: token,
+    });
+    return token;
   }
 }

@@ -79,6 +79,32 @@ export class AuthController {
     return { message: 'Email verified successfully' };
   }
 
+  @Post('resend-verification')
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ windowMs: 60 * 60 * 1000, max: 3 }) // 3 attempts per hour
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Resend email verification' })
+  @ApiResponse({ status: 200, description: 'Verification email sent' })
+  @ApiResponse({ status: 400, description: 'Email already verified or user not found' })
+  @ApiResponse({ status: 429, description: 'Too many resend attempts' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        email: {
+          type: 'string',
+          format: 'email',
+          example: 'user@example.com'
+        }
+      },
+      required: ['email']
+    }
+  })
+  async resendVerification(@Body('email') email: string) {
+    await this.authService.resendVerificationEmail(email);
+    return { message: 'If an unverified account with that email exists, a verification email has been sent.' };
+  }
+
   @Post('forgot-password')
   @UseGuards(RateLimitGuard)
   @RateLimit({ windowMs: 60 * 60 * 1000, max: 3 }) // 3 attempts per hour

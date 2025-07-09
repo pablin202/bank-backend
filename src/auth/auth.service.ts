@@ -1,5 +1,6 @@
 import { JwtService } from '@nestjs/jwt';
 import { UserService } from 'src/user/user.service';
+import { EmailService } from 'src/email/email.service';
 import {
   ConflictException,
   Injectable,
@@ -22,6 +23,7 @@ export class AuthService {
   constructor(
     private readonly jwtService: JwtService,
     private readonly userService: UserService,
+    private readonly emailService: EmailService,
   ) { }
 
   async validateUser(email: string, password: string): Promise<UserSafeData | null> {
@@ -108,8 +110,16 @@ export class AuthService {
       
       this.logger.log(`New user registered: ${email}`);
       
-      // TODO: Send email verification email
-      // await this.emailService.sendVerificationEmail(user.email, user.emailVerificationToken);
+      // Send email verification email
+      if (user.emailVerificationToken) {
+        try {
+          await this.emailService.sendVerificationEmail(user.email, user.emailVerificationToken);
+          this.logger.log(`Verification email sent to: ${email}`);
+        } catch (error) {
+          this.logger.error(`Failed to send verification email to ${email}:`, error.message);
+          // Don't throw error here as user is already created
+        }
+      }
       
       return user;
     } catch (error) {
@@ -120,8 +130,17 @@ export class AuthService {
 
   async verifyEmail(token: string): Promise<void> {
     try {
-      await this.userService.verifyEmail(token);
+      const user = await this.userService.verifyEmail(token);
       this.logger.log(`Email verified successfully for token: ${token.substring(0, 8)}...`);
+      
+      // Send welcome email after successful verification
+      try {
+        await this.emailService.sendWelcomeEmail(user.email);
+        this.logger.log(`Welcome email sent to: ${user.email}`);
+      } catch (error) {
+        this.logger.error(`Failed to send welcome email to ${user.email}:`, error.message);
+        // Don't throw error here as verification was successful
+      }
     } catch (error) {
       this.logger.error(`Email verification failed:`, error.message);
       throw error;
@@ -132,13 +151,46 @@ export class AuthService {
     try {
       const resetToken = await this.userService.generatePasswordResetToken(email);
       
-      // TODO: Send password reset email
-      // await this.emailService.sendPasswordResetEmail(email, resetToken);
+      // Send password reset email
+      try {
+        await this.emailService.sendPasswordResetEmail(email, resetToken);
+        this.logger.log(`Password reset email sent to: ${email}`);
+      } catch (error) {
+        this.logger.error(`Failed to send password reset email to ${email}:`, error.message);
+        // Don't throw error here for security reasons (don't reveal if email exists)
+      }
       
       this.logger.log(`Password reset requested for email: ${email}`);
     } catch (error) {
       // Don't reveal if email exists or not for security
       this.logger.warn(`Password reset attempt for email: ${email}`);
+    }
+  }
+
+  async resendVerificationEmail(email: string): Promise<void> {
+    try {
+      const user = await this.userService.findByEmail(email);
+      
+      // Don't reveal if user exists or not for security
+      if (!user || user.isEmailVerified) {
+        this.logger.warn(`Resend verification attempt for email: ${email}`);
+        return;
+      }
+
+      // Generate new verification token if needed
+      let verificationToken = user.emailVerificationToken;
+      if (!verificationToken) {
+        verificationToken = await this.userService.generateEmailVerificationToken(user.id);
+      }
+
+      // Send verification email
+      if (verificationToken) {
+        await this.emailService.sendVerificationEmail(user.email, verificationToken);
+      }
+      this.logger.log(`Verification email resent to: ${email}`);
+    } catch (error) {
+      // Don't reveal if email exists or not for security
+      this.logger.warn(`Resend verification attempt for email: ${email}`);
     }
   }
 
